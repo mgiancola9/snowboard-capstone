@@ -27,6 +27,12 @@ const float ACCEL_LSB_PER_G = 4096.0f;   // +/-8 g
 const float GYRO_LSB_PER_DPS = 65.5f;    // +/-500 deg/s
 const float G = 9.80665f;
 
+// Serial Monitor mode: slower, readable "label:value" lines (also works in Tools > Serial Plotter).
+// Set READABLE = false and PRINT_EVERY = 1 for tools/live_imu.py, which expects full-rate CSV.
+const bool READABLE = true;
+const int PRINT_EVERY = 20;           // print 1 of every N samples: 20 -> 5 lines/s
+int sampleCount = 0;
+
 float gBiasX = 0, gBiasY = 0, gBiasZ = 0;
 float roll = 0, pitch = 0, yaw = 0;
 uint32_t lastSampleUs = 0;
@@ -92,6 +98,19 @@ void calibrate() {
   Serial.printf("# gyro bias (deg/s): %.2f, %.2f, %.2f\n", gBiasX, gBiasY, gBiasZ);
 }
 
+void printSample(float roll, float pitch, float yaw, float rollAcc, float pitchAcc,
+                 float ax, float ay, float az, float gx, float gy, float gz) {
+  if (++sampleCount % PRINT_EVERY != 0) return;
+  if (READABLE) {
+    Serial.printf("roll:%.1f,pitch:%.1f,yaw:%.1f,ax:%.2f,ay:%.2f,az:%.2f,gx:%.1f,gy:%.1f,gz:%.1f\n",
+                  roll, pitch, yaw, ax, ay, az, gx, gy, gz);
+  } else {
+    Serial.printf("%lu,%.2f,%.2f,%.2f,%.2f,%.2f,%.3f,%.3f,%.3f,%.2f,%.2f,%.2f\n",
+                  millis(), roll, pitch, yaw, rollAcc, pitchAcc,
+                  ax, ay, az, gx, gy, gz);
+  }
+}
+
 void setup() {
   Serial.begin(115200);
   uint32_t start = millis();
@@ -117,7 +136,7 @@ void setup() {
   writeReg(0x1C, 0x10);  // ACCEL_CONFIG: +/-8 g
 
   calibrate();
-  Serial.println("t_ms,roll,pitch,yaw,roll_acc,pitch_acc,ax,ay,az,gx,gy,gz");
+  if (!READABLE) Serial.println("t_ms,roll,pitch,yaw,roll_acc,pitch_acc,ax,ay,az,gx,gy,gz");
   lastSampleUs = micros();
 }
 
@@ -147,7 +166,5 @@ void loop() {
   pitch = ALPHA * (pitch + gy * dt) + (1 - ALPHA) * pitchAcc;
   yaw += gz * dt;
 
-  Serial.printf("%lu,%.2f,%.2f,%.2f,%.2f,%.2f,%.3f,%.3f,%.3f,%.2f,%.2f,%.2f\n",
-                millis(), roll, pitch, yaw, rollAcc, pitchAcc,
-                ax, ay, az, gx, gy, gz);
+  printSample(roll, pitch, yaw, rollAcc, pitchAcc, ax, ay, az, gx, gy, gz);
 }

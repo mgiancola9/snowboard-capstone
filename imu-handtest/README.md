@@ -21,7 +21,19 @@ Both print the same CSV columns at 100 Hz:
 
 Keep the sensor still for ~2 s after boot while it calibrates the gyro.
 
+## Output modes
+
+At the top of each sketch:
+
+- `READABLE = true`, `PRINT_EVERY = 20` (default): 5 lines/s of `roll:..,pitch:..,ax:..` for eyeballing in
+  Serial Monitor at 115200, or as live graphs in Tools > Serial Plotter.
+- `READABLE = false`, `PRINT_EVERY = 1`: full 100 Hz CSV for `tools/live_imu.py`.
+
+The filter always runs at 100 Hz; `PRINT_EVERY` only thins what gets printed.
+
 ## Live plot
+
+Flash with `READABLE = false` and `PRINT_EVERY = 1` first.
 
 ```
 python3 -m venv .venv

@@ -17,6 +17,12 @@
 
 const uint32_t REPORT_INTERVAL_US = 10000;  // 100 Hz
 
+// Serial Monitor mode: slower, readable "label:value" lines (also works in Tools > Serial Plotter).
+// Set READABLE = false and PRINT_EVERY = 1 for tools/live_imu.py, which expects full-rate CSV.
+const bool READABLE = true;
+const int PRINT_EVERY = 20;           // print 1 of every N samples: 20 -> 5 lines/s
+int sampleCount = 0;
+
 Adafruit_BNO08x bno08x(-1);  // no reset pin wired
 sh2_SensorValue_t sensorValue;
 
@@ -29,6 +35,19 @@ void enableReports() {
             bno08x.enableReport(SH2_ACCELEROMETER, REPORT_INTERVAL_US) &&
             bno08x.enableReport(SH2_GYROSCOPE_CALIBRATED, REPORT_INTERVAL_US);
   Serial.println(ok ? "# reports enabled" : "# ERROR: could not enable reports");
+}
+
+void printSample(float roll, float pitch, float yaw, float rollAcc, float pitchAcc,
+                 float ax, float ay, float az, float gx, float gy, float gz) {
+  if (++sampleCount % PRINT_EVERY != 0) return;
+  if (READABLE) {
+    Serial.printf("roll:%.1f,pitch:%.1f,yaw:%.1f,ax:%.2f,ay:%.2f,az:%.2f,gx:%.1f,gy:%.1f,gz:%.1f\n",
+                  roll, pitch, yaw, ax, ay, az, gx, gy, gz);
+  } else {
+    Serial.printf("%lu,%.2f,%.2f,%.2f,%.2f,%.2f,%.3f,%.3f,%.3f,%.2f,%.2f,%.2f\n",
+                  millis(), roll, pitch, yaw, rollAcc, pitchAcc,
+                  ax, ay, az, gx, gy, gz);
+  }
 }
 
 void setup() {
@@ -49,7 +68,7 @@ void setup() {
   }
   Serial.println("# BNO085 found");
   enableReports();
-  Serial.println("t_ms,roll,pitch,yaw,roll_acc,pitch_acc,ax,ay,az,gx,gy,gz");
+  if (!READABLE) Serial.println("t_ms,roll,pitch,yaw,roll_acc,pitch_acc,ax,ay,az,gx,gy,gz");
 }
 
 void loop() {
@@ -96,9 +115,7 @@ void loop() {
       float rollAcc  = atan2f(ay, az) * RAD_TO_DEG;
       float pitchAcc = atan2f(-ax, sqrtf(ay * ay + az * az)) * RAD_TO_DEG;
 
-      Serial.printf("%lu,%.2f,%.2f,%.2f,%.2f,%.2f,%.3f,%.3f,%.3f,%.2f,%.2f,%.2f\n",
-                    millis(), roll, pitch, yaw, rollAcc, pitchAcc,
-                    ax, ay, az, gx, gy, gz);
+      printSample(roll, pitch, yaw, rollAcc, pitchAcc, ax, ay, az, gx, gy, gz);
       break;
     }
   }
