@@ -25,7 +25,7 @@ Keep the sensor still for ~2 s after boot while it calibrates the gyro.
 
 At the top of each sketch:
 
-- `READABLE = true`, `PRINT_EVERY = 20` (default): 5 lines/s of `roll:..,pitch:..,ax:..` for eyeballing in
+- `READABLE = true`, `PRINT_EVERY = 50` (default): 2 lines/s of `roll:..,pitch:..,ax:..` for eyeballing in
   Serial Monitor at 115200, or as live graphs in Tools > Serial Plotter.
 - `READABLE = false`, `PRINT_EVERY = 1`: full 100 Hz CSV for `tools/live_imu.py`.
 

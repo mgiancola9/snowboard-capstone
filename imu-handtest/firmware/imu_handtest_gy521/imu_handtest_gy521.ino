@@ -30,7 +30,7 @@ const float G = 9.80665f;
 // Serial Monitor mode: slower, readable "label:value" lines (also works in Tools > Serial Plotter).
 // Set READABLE = false and PRINT_EVERY = 1 for tools/live_imu.py, which expects full-rate CSV.
 const bool READABLE = true;
-const int PRINT_EVERY = 20;           // print 1 of every N samples: 20 -> 5 lines/s
+const int PRINT_EVERY = 50;           // print 1 of every N samples: 50 -> 2 lines/s
 int sampleCount = 0;
 
 float gBiasX = 0, gBiasY = 0, gBiasZ = 0;
