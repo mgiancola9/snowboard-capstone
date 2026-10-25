@@ -1,4 +1,7 @@
-"""Live plot of the ESP32 + GY-521 (MPU-6050) hand test, with optional CSV logging.
+"""Live plot of the ESP32 IMU + FSR pressure hand test, with optional CSV logging.
+
+Works with either sketch (GY-521 or BNO085). Any columns after the 12 IMU columns are
+treated as pressure channels (p0_mv, p1_mv, ...), so the FSR count is picked up automatically.
 
     python imu-handtest/tools/live_imu.py                 # auto-detect the ESP32 port
     python imu-handtest/tools/live_imu.py --port /dev/cu.usbmodem101 --log run1.csv
@@ -23,6 +26,7 @@ from serial.tools import list_ports
 
 COLUMNS = ["t_ms", "roll", "pitch", "yaw", "roll_acc", "pitch_acc",
            "ax", "ay", "az", "gx", "gy", "gz"]
+MAX_FSR = 4
 WINDOW_S = 10
 MAX_POINTS = WINDOW_S * 100 * 2  # headroom above 100 Hz
 
@@ -49,8 +53,7 @@ class Reader(threading.Thread):
         self.count = 0
         self.log_file = open(log_path, "w", newline="") if log_path else None
         self.writer = csv.writer(self.log_file) if self.log_file else None
-        if self.writer:
-            self.writer.writerow(["host_time"] + COLUMNS + ["label"])
+        self.n_fsr = None  # set from the first data line
 
     def run(self):
         while True:
@@ -61,12 +64,19 @@ class Reader(threading.Thread):
                 print(line)
                 continue
             parts = line.split(",")
-            if len(parts) != len(COLUMNS):
+            n_fsr = len(parts) - len(COLUMNS)
+            if not 0 <= n_fsr <= MAX_FSR or (self.n_fsr is not None and n_fsr != self.n_fsr):
                 continue
             try:
                 row = [float(v) for v in parts]
             except ValueError:
                 continue
+            if self.n_fsr is None:
+                self.n_fsr = n_fsr
+                print(f"# {n_fsr} pressure channel(s) detected")
+                if self.writer:
+                    self.writer.writerow(["host_time"] + COLUMNS +
+                                         [f"p{i}_mv" for i in range(n_fsr)] + ["label"])
             with self.lock:
                 self.buf.append(row)
                 self.count += 1
@@ -90,7 +100,7 @@ def main():
     reader = Reader(port, args.baud, args.log)
     reader.start()
 
-    fig, (ax_ang, ax_gyro, ax_acc) = plt.subplots(3, 1, figsize=(11, 8), sharex=True)
+    fig, (ax_ang, ax_p, ax_gyro, ax_acc) = plt.subplots(4, 1, figsize=(11, 10), sharex=True)
     fig.suptitle(f"IMU live: {port}   (z = zero)")
 
     lines = {
@@ -106,13 +116,16 @@ def main():
         "az": ax_acc.plot([], [], label="az")[0],
         "amag": ax_acc.plot([], [], label="|a|", color="black", lw=0.8)[0],
     }
+    p_lines = [ax_p.plot([], [], label=f"p{i}", lw=1.5)[0] for i in range(MAX_FSR)]
     ax_ang.set_ylabel("deg")
     ax_ang.set_ylim(-95, 95)
+    ax_p.set_ylabel("pressure (mV)")
+    ax_p.set_ylim(-50, 3350)
     ax_gyro.set_ylabel("deg/s")
     ax_acc.set_ylabel("m/s²")
     ax_acc.axhline(9.81, color="gray", lw=0.8, ls=":")
     ax_acc.set_xlabel("seconds (ESP32 clock)")
-    for a in (ax_ang, ax_gyro, ax_acc):
+    for a in (ax_ang, ax_p, ax_gyro, ax_acc):
         a.legend(loc="upper left", fontsize=8)
         a.grid(alpha=0.3)
     readout = ax_ang.text(0.99, 0.95, "", transform=ax_ang.transAxes, ha="right", va="top",
@@ -121,6 +134,7 @@ def main():
 
     idx = {c: i for i, c in enumerate(COLUMNS)}
     rate_state = {"t": time.time(), "n": 0, "hz": 0.0}
+    legend_state = {"n": None}
 
     def on_key(event):
         if event.key and event.key.isdigit():
@@ -146,6 +160,14 @@ def main():
             lines[name].set_data(t, data[:, idx[name]])
         amag = np.linalg.norm(data[:, [idx["ax"], idx["ay"], idx["az"]]], axis=1)
         lines["amag"].set_data(t, amag)
+        n_fsr = data.shape[1] - len(COLUMNS)
+        if legend_state["n"] != n_fsr:
+            ax_p.legend(handles=p_lines[:n_fsr], loc="upper left", fontsize=8)
+            legend_state["n"] = n_fsr
+        for i, pl in enumerate(p_lines):
+            pl.set_visible(i < n_fsr)
+            if i < n_fsr:
+                pl.set_data(t, data[:, len(COLUMNS) + i])
 
         ax_ang.set_xlim(t[-1] - WINDOW_S, t[-1])
         for a in (ax_gyro, ax_acc):
@@ -158,9 +180,11 @@ def main():
             rate_state["t"], rate_state["n"] = now, reader.count
 
         last = data[-1]
+        pressures = "  ".join(f"p{i} {last[len(COLUMNS) + i]:5.0f} mV" for i in range(n_fsr))
         readout.set_text(
             f"roll {last[idx['roll']]:7.1f}°  pitch {last[idx['pitch']]:7.1f}°  yaw {last[idx['yaw']]:7.1f}°\n"
-            f"|a| {amag[-1]:5.2f} m/s²   {rate_state['hz']:5.1f} Hz   label '{reader.label}'"
+            f"|a| {amag[-1]:5.2f} m/s²   {rate_state['hz']:5.1f} Hz   label '{reader.label}'\n"
+            f"{pressures}"
         )
 
     _anim = FuncAnimation(fig, update, interval=50, cache_frame_data=False)

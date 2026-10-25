@@ -8,7 +8,22 @@ Proof of concept: ESP32 + IMU streaming orientation over USB, plotted live on a 
 | `firmware/imu_handtest_bno085` | Adafruit BNO085 over SPI | Needs the "Adafruit BNO08x" library. Orientation fused on the chip. |
 
 Both print the same CSV columns at 100 Hz:
-`t_ms,roll,pitch,yaw,roll_acc,pitch_acc,ax,ay,az,gx,gy,gz` (degrees, m/s², deg/s).
+`t_ms,roll,pitch,yaw,roll_acc,pitch_acc,ax,ay,az,gx,gy,gz` (degrees, m/s², deg/s),
+followed by one `pN_mv` column per FSR pressure sensor.
+
+## FSR402 pressure sensor wiring (both sketches)
+
+```
+3V3 ──── FSR leg A
+         FSR leg B ──┬──── GPIO34   (second sensor: GPIO35)
+                     └── 10kΩ ──── GND
+```
+
+More force means lower FSR resistance and a higher reading: about 0 mV unloaded, about
+2000–3000 mV pressed firmly. Set `FSR_PINS` at the top of the sketch to the pins in use
+(`{34}` for one sensor, `{34, 35}` for two). Use ADC1 pins (32–39) only, because ADC2
+pins stop working once Bluetooth or Wi-Fi is on. Don't solder to the FSR tabs; use a
+breadboard or female jumpers. FSR resistance ≈ 10 kΩ × (3300 − mV) / mV.
 
 ## GY-521 wiring (ESP32 DevKit)
 

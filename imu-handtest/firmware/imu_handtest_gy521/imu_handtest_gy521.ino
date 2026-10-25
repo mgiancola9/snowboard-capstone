@@ -12,6 +12,7 @@
 //   roll_acc, pitch_acc    tilt from the accelerometer alone, in degrees
 //   ax, ay, az             acceleration in m/s^2, gravity included
 //   gx, gy, gz             angular rate in deg/s, startup bias removed
+//   p0_mv, p1_mv, ...      FSR divider voltage in mV, one column per entry in FSR_PINS
 //
 // Keep the sensor still for the first ~2 s after boot (gyro bias calibration).
 // Send 'z' over serial to recalibrate and zero the angles.
@@ -32,6 +33,12 @@ const float G = 9.80665f;
 const bool READABLE = true;
 const int PRINT_EVERY = 50;           // print 1 of every N samples: 50 -> 2 lines/s
 int sampleCount = 0;
+
+// FSR402 pressure sensors: 3V3 -> FSR -> pin, and pin -> 10k -> GND. More force = higher mV.
+// ADC1 pins only (32-39), since ADC2 pins stop working once Bluetooth or Wi-Fi is on.
+const int FSR_PINS[] = {34};          // one sensor; use {34, 35} for two
+const int NUM_FSR = sizeof(FSR_PINS) / sizeof(FSR_PINS[0]);
+const int FSR_OVERSAMPLE = 8;         // average several readings to cut ADC noise
 
 float gBiasX = 0, gBiasY = 0, gBiasZ = 0;
 float roll = 0, pitch = 0, yaw = 0;
@@ -98,17 +105,26 @@ void calibrate() {
   Serial.printf("# gyro bias (deg/s): %.2f, %.2f, %.2f\n", gBiasX, gBiasY, gBiasZ);
 }
 
+int readFsrMv(int pin) {
+  uint32_t sum = 0;
+  for (int i = 0; i < FSR_OVERSAMPLE; i++) sum += analogReadMilliVolts(pin);
+  return sum / FSR_OVERSAMPLE;
+}
+
 void printSample(float roll, float pitch, float yaw, float rollAcc, float pitchAcc,
                  float ax, float ay, float az, float gx, float gy, float gz) {
   if (++sampleCount % PRINT_EVERY != 0) return;
   if (READABLE) {
-    Serial.printf("roll:%.1f,pitch:%.1f,yaw:%.1f,ax:%.2f,ay:%.2f,az:%.2f,gx:%.1f,gy:%.1f,gz:%.1f\n",
+    Serial.printf("roll:%.1f,pitch:%.1f,yaw:%.1f,ax:%.2f,ay:%.2f,az:%.2f,gx:%.1f,gy:%.1f,gz:%.1f",
                   roll, pitch, yaw, ax, ay, az, gx, gy, gz);
+    for (int i = 0; i < NUM_FSR; i++) Serial.printf(",p%d:%d", i, readFsrMv(FSR_PINS[i]));
   } else {
-    Serial.printf("%lu,%.2f,%.2f,%.2f,%.2f,%.2f,%.3f,%.3f,%.3f,%.2f,%.2f,%.2f\n",
+    Serial.printf("%lu,%.2f,%.2f,%.2f,%.2f,%.2f,%.3f,%.3f,%.3f,%.2f,%.2f,%.2f",
                   millis(), roll, pitch, yaw, rollAcc, pitchAcc,
                   ax, ay, az, gx, gy, gz);
+    for (int i = 0; i < NUM_FSR; i++) Serial.printf(",%d", readFsrMv(FSR_PINS[i]));
   }
+  Serial.println();
 }
 
 void setup() {
@@ -136,7 +152,11 @@ void setup() {
   writeReg(0x1C, 0x10);  // ACCEL_CONFIG: +/-8 g
 
   calibrate();
-  if (!READABLE) Serial.println("t_ms,roll,pitch,yaw,roll_acc,pitch_acc,ax,ay,az,gx,gy,gz");
+  if (!READABLE) {
+    Serial.print("t_ms,roll,pitch,yaw,roll_acc,pitch_acc,ax,ay,az,gx,gy,gz");
+    for (int i = 0; i < NUM_FSR; i++) Serial.printf(",p%d_mv", i);
+    Serial.println();
+  }
   lastSampleUs = micros();
 }
 
