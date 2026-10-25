@@ -65,7 +65,11 @@ void setup() {
   uint32_t start = millis();
   while (!Serial && millis() - start < 3000) delay(10);  // native USB boards need a moment
 
+  Serial.println("# BNO085 SPI sketch starting");
+  Serial.flush();
   SPI.begin(BNO085_SCK, BNO085_MISO, BNO085_MOSI, BNO085_CS);
+  Serial.println("# SPI bus started; initializing BNO085...");
+  Serial.flush();
   while (!bno08x.begin_SPI(BNO085_CS, BNO085_INT, &SPI)) {
     Serial.println("# ERROR: BNO085 not found over SPI. Check wiring and P0/P1 = 3V3. Retrying...");
     delay(1000);
