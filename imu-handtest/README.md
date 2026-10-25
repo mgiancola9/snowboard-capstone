@@ -64,10 +64,15 @@ SPI avoids the BNO085/ESP32 I2C compatibility issue documented in
 Install "Adafruit BNO08x" and its dependencies before compiling. Open the serial
 monitor at 115200 baud; successful initialization prints `# BNO085 found over SPI`.
 
-Current test status: compiled with ESP32 core 3.3.12 and Adafruit BNO08x 1.2.7,
-and uploaded with flash verification. Hardware testing has not yet produced SPI
-sensor readings: the ESP32 boots, but `# BNO085 found over SPI` does not appear.
-Sensor initialization and wiring still need investigation.
+Current test status: compiled with ESP32 core 3.3.12 and Adafruit BNO08x 1.2.7.
+SPI works on hardware: `# BNO085 found over SPI` appears and orientation readings stream.
+The FSR pressure readings have not been tested on hardware yet.
+
+Troubleshooting: if the serial output stops at `# SPI bus started; initializing BNO085...`,
+the sensor isn't answering over SPI. The Adafruit library waits indefinitely for the
+sensor's product ID instead of returning false, so the retry message never prints. The
+original failure was a disconnected DI wire (GPIO23): the sensor could send data but never
+received the ESP32's requests. Check DI first, then SCL, SDA and CS, and P0/P1 = 3V3.
 
 ## Output modes
 
