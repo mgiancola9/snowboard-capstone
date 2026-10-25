@@ -5,7 +5,7 @@ Proof of concept: ESP32 + IMU streaming orientation over USB, plotted live on a 
 | Sketch | IMU | Notes |
 |---|---|---|
 | `firmware/imu_handtest_gy521` | GY-521 (MPU-6050) | No libraries. Complementary filter on the ESP32. Yaw drifts (no magnetometer). |
-| `firmware/imu_handtest_bno085` | Adafruit BNO085 | Needs the "Adafruit BNO08x" library. Orientation fused on the chip. |
+| `firmware/imu_handtest_bno085` | Adafruit BNO085 over SPI | Needs the "Adafruit BNO08x" library. Orientation fused on the chip. |
 
 Both print the same CSV columns at 100 Hz:
 `t_ms,roll,pitch,yaw,roll_acc,pitch_acc,ax,ay,az,gx,gy,gz` (degrees, m/s², deg/s).
@@ -20,6 +20,39 @@ Both print the same CSV columns at 100 Hz:
 | SCL | GPIO22 |
 
 Keep the sensor still for ~2 s after boot while it calibrates the gyro.
+
+## BNO085 SPI wiring (classic ESP32 DevKit)
+
+Disconnect USB and any other power before rewiring. Replace the old I2C connections
+with the following connections; the STEMMA QT cable alone cannot carry SPI.
+
+| Adafruit BNO085 | ESP32 |
+|---|---|
+| VIN | 3V3 |
+| GND | GND |
+| SCL (SPI clock) | GPIO18 (SCK) |
+| SDA (SPI data out) | GPIO19 (MISO) |
+| DI (SPI data in) | GPIO23 (MOSI) |
+| CS | GPIO27 |
+| INT | GPIO26 |
+| RST | GPIO25 |
+| P0 | 3V3 |
+| P1 | 3V3 |
+
+P0 and P1 must both be high when the sensor resets to select SPI mode. Connect both
+INT and RST; the sketch uses GPIO25 to reset the sensor during initialization.
+Leave other breakout pins disconnected. These GPIOs match the constants at the top
+of `firmware/imu_handtest_bno085/imu_handtest_bno085.ino`.
+
+SPI avoids the BNO085/ESP32 I2C compatibility issue documented in
+[Adafruit's wiring guide](https://learn.adafruit.com/adafruit-9-dof-orientation-imu-fusion-breakout-bno085/arduino#spi-wiring).
+Install "Adafruit BNO08x" and its dependencies before compiling. Open the serial
+monitor at 115200 baud; successful initialization prints `# BNO085 found over SPI`.
+
+Current test status: compiled with ESP32 core 3.3.12 and Adafruit BNO08x 1.2.7,
+and uploaded with flash verification. Hardware testing has not yet produced SPI
+sensor readings: the ESP32 boots, but `# BNO085 found over SPI` does not appear.
+Sensor initialization and wiring still need investigation.
 
 ## Output modes
 
